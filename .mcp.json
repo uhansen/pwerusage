@@ -1,0 +1,38 @@
+{
+  "mcpServers": {
+    "structurizr": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/colincoleman/structurizr-mcp.git@178eea931d39b403081df7366fa9d1d68c017173",
+        "--with",
+        "mcp<2",
+        "structurizr-mcp"
+      ],
+      "env": {
+        "STRUCTURIZR_WORKSPACE_DIR": "."
+      },
+      "tools": [
+        "*"
+      ]
+    },
+    "c4-structurizr": {
+      "type": "stdio",
+      "command": "bash",
+      "args": [
+        ".github/mcp/run-c4-structurizr-mcp.sh"
+      ],
+      "tools": [
+        "*"
+      ]
+    },
+    "drawio": {
+      "type": "http",
+      "url": "https://mcp.draw.io/mcp",
+      "tools": [
+        "*"
+      ]
+    }
+  }
+}
