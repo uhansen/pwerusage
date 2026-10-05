@@ -1,0 +1,31 @@
+package pwrusage:weather@0.1.0;
+
+interface stations {
+    record position {
+        latitude: f64,
+        longitude: f64,
+    }
+
+    record weather-station {
+        id: string,
+        position: position,
+    }
+
+    record nearby-station {
+        station: weather-station,
+        distance-km: f64,
+    }
+
+    variant error {
+        invalid-position(string),
+    }
+
+    get-nearby-weather-stations: func(
+        my-position: position,
+        stations: list<weather-station>,
+    ) -> result<list<nearby-station>, error>;
+}
+
+world nearby-weather-stations {
+    export stations;
+}
