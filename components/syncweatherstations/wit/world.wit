@@ -1,0 +1,76 @@
+package pwrusage:weather-sync@0.1.0;
+
+interface types {
+    record station-version {
+        feature-id: string,
+        station-id: string,
+        name: string,
+        country: string,
+        owner: string,
+        station-type: string,
+        status: string,
+        longitude: f64,
+        latitude: f64,
+        parameter-ids: list<string>,
+        region-id: option<string>,
+        wmo-country-code: option<string>,
+        wmo-station-id: option<string>,
+        station-height: option<f64>,
+        barometer-height: option<f64>,
+        created: string,
+        updated: option<string>,
+        operation-from: string,
+        operation-to: option<string>,
+        valid-from: string,
+        valid-to: option<string>,
+        source-json: string,
+    }
+
+    record persist-summary {
+        inserted: u64,
+        changed: u64,
+        unchanged: u64,
+    }
+
+    record sync-summary {
+        pages: u32,
+        received: u64,
+        unique: u64,
+        inserted: u64,
+        changed: u64,
+        unchanged: u64,
+    }
+
+    variant sync-error {
+        transport(string),
+        upstream(string),
+        invalid-data(string),
+        storage(string),
+        limit-exceeded(string),
+    }
+}
+
+interface transport {
+    record response {
+        status: u16,
+        body: string,
+        retry-after-ms: option<u64>,
+    }
+
+    get: func(url: string) -> result<response, string>;
+    sleep-ms: func(milliseconds: u64);
+}
+
+interface storage {
+    use types.{station-version, persist-summary};
+
+    persist: func(stations: list<station-version>) -> result<persist-summary, string>;
+}
+
+world sync-weather-stations {
+    use types.{sync-summary, sync-error};
+
+    import transport;
+    import storage;
+    export sync: func() -> result<sync-summary, sync-error>;
+}

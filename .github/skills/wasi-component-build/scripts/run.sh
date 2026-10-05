@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
 # Run a WASI component with flags matching its target.
-# Usage: scripts/run.sh <path.wasm> [args...]
+# Usage: scripts/run.sh [--host <host-binary>] <path.wasm> [args...]
 set -euo pipefail
+
+if [[ ${1:-} == "--host" ]]; then
+  HOST=${2:?usage: run.sh --host <host-binary> <path.wasm> [args...]}
+  WASM=${3:?usage: run.sh --host <host-binary> <path.wasm> [args...]}
+  shift 3
+  exec "$HOST" --component "$WASM" "$@"
+fi
 
 WASM=${1:?usage: run.sh <path.wasm> [args...]}
 shift
