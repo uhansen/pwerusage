@@ -6,15 +6,17 @@ wit_bindgen::generate!({
 mod model;
 mod sync;
 
+use crate::pwrusage::weather_sync::types::{SyncError, SyncSummary};
+
 pub struct Component;
 
-pub fn sync_weather_stations() -> Result<SyncSummary, SyncError> {
-    sync::run()
+pub async fn sync_weather_stations() -> Result<SyncSummary, SyncError> {
+    sync::run().await
 }
 
-impl Guest for Component {
-    fn sync() -> Result<SyncSummary, SyncError> {
-        sync_weather_stations()
+impl exports::pwrusage::weather_sync::runner::Guest for Component {
+    async fn sync() -> Result<SyncSummary, SyncError> {
+        sync_weather_stations().await
     }
 }
 

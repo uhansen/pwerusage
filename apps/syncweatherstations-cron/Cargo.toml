@@ -1,0 +1,18 @@
+[package]
+name = "syncweatherstations-cron"
+authors = ["Uffe Hansen <uffe.hansen@gmail.com>"]
+description = "Sync DMI weather stations into local PostgreSQL every 24 hours"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.86"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+anyhow = "1.0"
+spin-cron-sdk = { git = "https://github.com/spinframework/spin-trigger-plugins/" }
+wit-bindgen = { version = "0.62.0", features = ["macros"] }
+
+[workspace]
+members = ["adapter"]

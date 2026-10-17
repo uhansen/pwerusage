@@ -24,6 +24,12 @@ Run these commands from the repository root:
   `cd components/syncweatherstations && cargo test --manifest-path host/Cargo.toml`
 - Run the station sync host:
   `cd components/syncweatherstations && ../../.github/skills/wasi-component-build/scripts/run.sh --host host/target/debug/syncweatherstations-host <component-path>`
+- Build the Spin cron sync app:
+  `cd apps/syncweatherstations-cron && ./build.sh`
+- Build the Spin cron sync app with Spin:
+  `cd apps/syncweatherstations-cron && spin build`
+- Run the Spin cron sync app:
+  `cd apps/syncweatherstations-cron && SPIN_VARIABLE_DB_URL='postgresql://weatherstations_sync@127.0.0.1:5432/weatherstations' spin up`
 
 ## Architecture and conventions
 
@@ -42,5 +48,8 @@ Run these commands from the repository root:
 - `components/syncweatherstations/` owns DMI pagination, parsing, validation,
   and retry decisions. Its native Rust host owns restricted HTTPS transport,
   Wasmtime integration, PostgreSQL credentials, migrations, and transactions.
+- `apps/syncweatherstations-cron/` composes the `syncweatherstations` component
+  with a Spin adapter and cron handler; the final Spin app reuses the same DMI
+  sync logic and persists to PostgreSQL through Spin's outbound Postgres API.
 - Build `syncweatherstations` with the shared WASI skill script and run it
   through its custom host; ordinary `wasmtime run` cannot satisfy its imports.

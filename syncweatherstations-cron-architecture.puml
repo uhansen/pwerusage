@@ -1,0 +1,58 @@
+@startuml
+title syncweatherstations-cron local architecture
+
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam componentStyle rectangle
+skinparam wrapWidth 220
+skinparam maxMessageSize 220
+
+actor "Cron scheduler" as Cron
+
+package "Spin app\napps/syncweatherstations-cron" {
+  component "Cron handler\nsrc/lib.rs" as CronHandler
+  component "Composed component\ncomposed.wasm" as Composed
+  component "Adapter\nadapter/src/lib.rs" as Adapter
+  component "Sync engine\ncomponents/syncweatherstations" as SyncEngine
+}
+
+package "Compose sidecars" {
+  component "dmi-proxy\nnginx reverse proxy" as DmiProxy
+  database "weatherstations-db\nPostgreSQL 18" as Db
+  component "otel-collector" as OTel
+  component "jaeger" as Jaeger
+}
+
+cloud "External services" {
+  component "DMI station API" as DmiApi
+}
+
+Cron --> CronHandler : cron tick
+CronHandler --> Composed : invoke runner.sync()
+Composed --> SyncEngine : composed guest call
+SyncEngine --> Adapter : transport.get(url)\nstorage.persist(stations)
+
+Adapter --> DmiProxy : HTTP GET /v2/metObs/collections/station/items
+DmiProxy --> DmiApi : HTTPS GET to DMI
+
+Adapter --> Db : migration + advisory lock + upserts
+
+CronHandler ..> OTel : logs and traces
+Adapter ..> OTel : HTTP / DB spans
+OTel --> Jaeger : export traces
+
+note right of SyncEngine
+Validates trusted DMI URLs,
+deduplicates features,
+and builds the sync summary.
+end note
+
+note bottom of Adapter
+If dmi_proxy_base_url is set,
+the adapter rewrites the outbound
+DMI fetch to the local proxy while
+preserving path and query.
+end note
+
+@enduml

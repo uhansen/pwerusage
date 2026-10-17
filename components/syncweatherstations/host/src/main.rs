@@ -1,10 +1,11 @@
 mod database;
 mod http;
 
-use std::{path::PathBuf, time::Duration};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use anyhow::Result;
 use clap::Parser;
+use tokio::sync::Mutex;
 use wasmtime::{
     Config, Engine, Store,
     component::{Component, HasSelf, Linker, ResourceTable},
@@ -38,7 +39,7 @@ struct State {
     wasi: WasiCtx,
     table: ResourceTable,
     http: reqwest::Client,
-    database: tokio_postgres::Client,
+    database: Arc<Mutex<tokio_postgres::Client>>,
 }
 
 impl WasiView for State {
@@ -52,24 +53,34 @@ impl WasiView for State {
 
 impl bindings::pwrusage::weather_sync::types::Host for State {}
 
-impl TransportHost for State {
-    async fn get(&mut self, url: String) -> std::result::Result<Response, String> {
-        http::get(&self.http, &url)
+impl TransportHost for State {}
+
+impl bindings::pwrusage::weather_sync::transport::HostWithStore<State> for HasSelf<State> {
+    async fn get(
+        accessor: &wasmtime::component::Accessor<State, Self>,
+        url: String,
+    ) -> std::result::Result<Response, String> {
+        let client = accessor.with(|mut access| access.get().http.clone());
+        http::get(&client, &url)
             .await
             .map_err(|error| format!("{error:#}"))
     }
 
-    async fn sleep_ms(&mut self, milliseconds: u64) {
+    async fn sleep_ms(_accessor: &wasmtime::component::Accessor<State, Self>, milliseconds: u64) {
         tokio::time::sleep(Duration::from_millis(milliseconds)).await;
     }
 }
 
-impl StorageHost for State {
+impl StorageHost for State {}
+
+impl bindings::pwrusage::weather_sync::storage::HostWithStore<State> for HasSelf<State> {
     async fn persist(
-        &mut self,
+        accessor: &wasmtime::component::Accessor<State, Self>,
         stations: Vec<StationVersion>,
     ) -> std::result::Result<PersistSummary, String> {
-        database::persist(&mut self.database, &stations)
+        let database = accessor.with(|mut access| Arc::clone(&access.get().database));
+        let mut client = database.lock().await;
+        database::persist(&mut client, &stations)
             .await
             .map_err(|error| format!("{error:#}"))
     }
@@ -82,7 +93,9 @@ async fn main() -> Result<()> {
     database::migrate(&database).await?;
 
     let mut config = Config::new();
+    config.wasm_component_model_async(true);
     config.wasm_component_model(true);
+    config.concurrency_support(true);
     let engine = Engine::new(&config)
         .map_err(|error| anyhow::anyhow!("create Wasmtime engine: {error:#}"))?;
     let component = Component::from_file(&engine, &args.component)
@@ -99,16 +112,22 @@ async fn main() -> Result<()> {
         wasi: WasiCtxBuilder::new().build(),
         table: ResourceTable::new(),
         http: http::client()?,
-        database,
+        database: Arc::new(Mutex::new(database)),
     };
     let mut store = Store::new(&engine, state);
     let instance =
         bindings::SyncWeatherStations::instantiate_async(&mut store, &component, &linker)
             .await
             .map_err(|error| anyhow::anyhow!("instantiate sync component: {error:#}"))?;
-    let result = instance
-        .call_sync(&mut store)
+    let result = store
+        .run_concurrent(async |accessor| {
+            instance
+                .pwrusage_weather_sync_runner()
+                .call_sync(accessor)
+                .await
+        })
         .await
+        .map_err(|error| anyhow::anyhow!("invoke sync component: {error:#}"))?
         .map_err(|error| anyhow::anyhow!("invoke sync component: {error:#}"))?;
 
     match result {

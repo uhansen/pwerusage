@@ -1,0 +1,16 @@
+[package]
+name = "syncweatherstations-adapter"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.86"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+anyhow = "1.0"
+futures = "0.3"
+serde_json = "1.0"
+spin-sdk = { version = "6", features = ["http", "json", "pg", "variables"] }
+url = "2.5"
+wit-bindgen = { version = "0.62.0", features = ["macros"] }

@@ -21,7 +21,7 @@ const MAX_BODY_BYTES: usize = 32 * 1024 * 1024;
 const MAX_RETRIES: u32 = 3;
 const MAX_RETRY_AFTER_MS: u64 = 30_000;
 
-pub fn run() -> Result<SyncSummary, SyncError> {
+pub async fn run() -> Result<SyncSummary, SyncError> {
     let mut next = Some(FIRST_PAGE.to_string());
     let mut visited = HashSet::new();
     let mut stations = HashMap::<String, (StationVersion, String)>::new();
@@ -41,7 +41,7 @@ pub fn run() -> Result<SyncSummary, SyncError> {
             )));
         }
 
-        let response = get_with_retry(&url)?;
+        let response = get_with_retry(&url).await?;
         if response.body.len() > MAX_BODY_BYTES {
             return Err(SyncError::LimitExceeded(format!(
                 "response body exceeds {MAX_BODY_BYTES} bytes"
@@ -107,7 +107,9 @@ pub fn run() -> Result<SyncSummary, SyncError> {
     let mut stations: Vec<_> = stations.into_values().map(|(station, _)| station).collect();
     stations.sort_by(|left, right| left.feature_id.cmp(&right.feature_id));
     let unique = stations.len() as u64;
-    let persisted = storage::persist(&stations).map_err(SyncError::Storage)?;
+    let persisted = storage::persist(stations)
+        .await
+        .map_err(SyncError::Storage)?;
 
     Ok(SyncSummary {
         pages,
@@ -119,13 +121,13 @@ pub fn run() -> Result<SyncSummary, SyncError> {
     })
 }
 
-fn get_with_retry(url: &str) -> Result<transport::Response, SyncError> {
+async fn get_with_retry(url: &str) -> Result<transport::Response, SyncError> {
     let mut attempts = 0_u32;
     loop {
-        let response = match transport::get(url) {
+        let response = match transport::get(url.to_string()).await {
             Ok(response) => response,
             Err(_) if attempts < MAX_RETRIES => {
-                sleep_before_retry(attempts, None);
+                sleep_before_retry(attempts, None).await;
                 attempts += 1;
                 continue;
             }
@@ -150,17 +152,17 @@ fn get_with_retry(url: &str) -> Result<transport::Response, SyncError> {
                 response.status, MAX_RETRIES
             )));
         }
-        sleep_before_retry(attempts, response.retry_after_ms);
+        sleep_before_retry(attempts, response.retry_after_ms).await;
         attempts += 1;
     }
 }
 
-fn sleep_before_retry(attempts: u32, retry_after_ms: Option<u64>) {
+async fn sleep_before_retry(attempts: u32, retry_after_ms: Option<u64>) {
     let exponential = 1_000_u64 << attempts;
     let delay = retry_after_ms
         .unwrap_or(exponential)
         .min(MAX_RETRY_AFTER_MS);
-    transport::sleep_ms(delay);
+    transport::sleep_ms(delay).await;
 }
 
 fn next_link(links: &[crate::model::Link]) -> Result<Option<String>, SyncError> {

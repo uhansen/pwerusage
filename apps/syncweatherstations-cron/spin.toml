@@ -1,0 +1,35 @@
+spin_manifest_version = 2
+
+[application]
+name = "syncweatherstations-cron"
+version = "0.1.0"
+authors = ["Uffe Hansen <uffe.hansen@gmail.com>"]
+description = "Sync DMI weather stations into local PostgreSQL once per week"
+
+[variables]
+db_url = { required = true, secret = true }
+db_outbound_host = { default = "postgres://127.0.0.1:5432" }
+dmi_proxy_base_url = { default = "" }
+
+[[trigger.cron]]
+component = "syncweatherstations-cron"
+cron_expression = "0 0 3 * * 0"
+
+[component.syncweatherstations-cron]
+source = "composed.wasm"
+allowed_outbound_hosts = ["https://opendataapi.dmi.dk", "{{ db_outbound_host }}"]
+[component.syncweatherstations-cron.build]
+command = "./build.sh"
+watch = [
+  "src/**/*.rs",
+  "adapter/src/**/*.rs",
+  "Cargo.toml",
+  "adapter/Cargo.toml",
+  "build.sh",
+  "../../components/syncweatherstations/src/**/*.rs",
+  "../../components/syncweatherstations/wit/**/*.wit",
+  "../../components/syncweatherstations/migrations/*.sql",
+]
+[component.syncweatherstations-cron.variables]
+db_url = "{{ db_url }}"
+dmi_proxy_base_url = "{{ dmi_proxy_base_url }}"

@@ -57,20 +57,24 @@ interface transport {
         retry-after-ms: option<u64>,
     }
 
-    get: func(url: string) -> result<response, string>;
-    sleep-ms: func(milliseconds: u64);
+    get: async func(url: string) -> result<response, string>;
+    sleep-ms: async func(milliseconds: u64);
 }
 
 interface storage {
     use types.{station-version, persist-summary};
 
-    persist: func(stations: list<station-version>) -> result<persist-summary, string>;
+    persist: async func(stations: list<station-version>) -> result<persist-summary, string>;
+}
+
+interface runner {
+    use types.{sync-summary, sync-error};
+
+    sync: async func() -> result<sync-summary, sync-error>;
 }
 
 world sync-weather-stations {
-    use types.{sync-summary, sync-error};
-
     import transport;
     import storage;
-    export sync: func() -> result<sync-summary, sync-error>;
+    export runner;
 }
