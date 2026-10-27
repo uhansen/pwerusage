@@ -1,0 +1,38 @@
+spin_manifest_version = 2
+
+[application]
+name = "save-eye-listener-app"
+version = "0.1.0"
+authors = ["Uffe Hansen <uffe.hansen@gmail.com>"]
+description = "MQTT listener for SaveEye+ (Kamstrup) telemetry"
+
+# Every value below can be overridden at runtime, for example:
+#   spin up --variable mqtt_address=mqtt://broker.local:1883 \
+#           --variable mqtt_username=saveeye --variable mqtt_password=secret
+[variables]
+mqtt_address = { default = "mqtt://localhost:1883" }
+mqtt_username = { default = "" }
+mqtt_password = { default = "" }
+mqtt_topic = { default = "saveeye/telemetry" }
+# Leave empty to accept telemetry from every SaveEye device on the topic.
+device_serial = { default = "" }
+
+[application.trigger.mqtt]
+address = "{{ mqtt_address }}"
+username = "{{ mqtt_username }}"
+password = "{{ mqtt_password }}"
+keep_alive_interval = "30"
+
+[[trigger.mqtt]]
+component = "save-eye-listener-app"
+topic = "{{ mqtt_topic }}"
+qos = "1"
+
+[component.save-eye-listener-app]
+source = "target/wasm32-wasip2/release/save_eye_listener_app.wasm"
+key_value_stores = ["default"]
+[component.save-eye-listener-app.variables]
+device_serial = "{{ device_serial }}"
+[component.save-eye-listener-app.build]
+command = "cargo build --target wasm32-wasip2 --release"
+watch = ["src/**/*.rs", "Cargo.toml"]

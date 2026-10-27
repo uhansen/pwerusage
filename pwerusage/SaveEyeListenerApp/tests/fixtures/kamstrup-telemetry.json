@@ -1,0 +1,38 @@
+{
+  "saveeyeDeviceSerialNumber": "J85LH2H4",
+  "meterType": "Kamstrup Omnipower",
+  "meterSerialNumber": "68412345",
+  "timestamp": "2026-10-27T08:15:00Z",
+  "wifiRssi": -58,
+  "activeActualConsumption": {
+    "total": 812
+  },
+  "activeActualProduction": {
+    "total": 0
+  },
+  "activeTotalConsumption": {
+    "total": 18423300
+  },
+  "activeTotalProduction": {
+    "total": 2150400
+  },
+  "reactiveActualConsumption": {
+    "total": 95
+  },
+  "reactiveTotalConsumption": {
+    "total": 1203400
+  },
+  "rmsVoltage": {
+    "L1": 231,
+    "L2": 229,
+    "L3": 233
+  },
+  "rmsCurrent": {
+    "L1": 1200,
+    "L2": 900,
+    "L3": 1400
+  },
+  "powerFactor": {
+    "total": 97
+  }
+}

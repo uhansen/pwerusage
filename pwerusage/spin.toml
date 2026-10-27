@@ -1,0 +1,7 @@
+spin_manifest_version = 2
+
+[application]
+name = "pwerusage"
+version = "0.1.0"
+authors = ["Uffe Hansen <uffe.hansen@gmail.com>"]
+description = ""
