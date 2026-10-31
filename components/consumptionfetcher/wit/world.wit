@@ -1,0 +1,70 @@
+package pwrusage:consumption-fetcher@0.1.0;
+
+interface types {
+    record address {
+        street-name: string,
+        building-number: string,
+        floor: option<string>,
+        door: option<string>,
+        postcode: string,
+        city: option<string>,
+    }
+
+    enum direction { consumption, production, grid-export }
+    enum granularity { day, week, month, year }
+
+    record metering-point {
+        id: string,
+        type-of-mp: string,
+        address: address,
+        direction: direction,
+    }
+
+    record usage-period {
+        metering-point-id: string,
+        direction: direction,
+        granularity: granularity,
+        period-start: string,
+        period-end: string,
+        milli-kwh: option<s64>,
+        quality: string,
+        complete: bool,
+    }
+
+    record fetch-summary {
+        metering-points: u32,
+        daily-records: u32,
+        persisted-records: u32,
+        unavailable-periods: u32,
+    }
+
+    variant fetch-error {
+        config(string),
+        auth(string),
+        address-not-found(string),
+        ambiguous-address(string),
+        no-relation(string),
+        upstream(string),
+        rate-limited(string),
+        invalid-data(string),
+        storage(string),
+    }
+}
+
+interface storage {
+    use types.{usage-period, metering-point};
+
+    load-days: async func(metering-point-id: string) -> result<list<usage-period>, string>;
+    persist: async func(points: list<metering-point>, periods: list<usage-period>) -> result<u32, string>;
+}
+
+interface fetcher {
+    use types.{address, fetch-summary, fetch-error};
+
+    fetch: async func(address: address, date-from: option<string>, date-to: option<string>) -> result<fetch-summary, fetch-error>;
+}
+
+world consumption-fetcher {
+    import storage;
+    export fetcher;
+}

@@ -24,6 +24,16 @@ Run these commands from the repository root:
   `cd components/syncweatherstations && cargo test --manifest-path host/Cargo.toml`
 - Run the station sync host:
   `cd components/syncweatherstations && ../../.github/skills/wasi-component-build/scripts/run.sh --host host/target/debug/syncweatherstations-host <component-path>`
+- Build the consumption fetcher:
+  `cd components/consumptionfetcher && ../../.github/skills/wasi-component-build/scripts/build.sh`
+- Test/lint/format the consumption fetcher:
+  `cd components/consumptionfetcher && cargo test && cargo clippy --all-targets -- -D warnings && cargo fmt --check`
+- Build the consumption fetcher host:
+  `cd components/consumptionfetcher && cargo build --manifest-path host/Cargo.toml`
+- Test/lint/format the consumption fetcher host:
+  `cd components/consumptionfetcher && cargo test --manifest-path host/Cargo.toml && cargo clippy --manifest-path host/Cargo.toml --all-targets -- -D warnings && cargo fmt --manifest-path host/Cargo.toml --check`
+- Run the consumption fetcher host (with `ELOVERBLIK_REFRESH_TOKEN` and `DATABASE_URL` set):
+  `cd components/consumptionfetcher && ../../.github/skills/wasi-component-build/scripts/run.sh --host host/target/debug/consumptionfetcher-host <component-path> --street Examplevej --number 12 --postcode 2200`
 - Build the Spin cron sync app:
   `cd apps/syncweatherstations-cron && ./build.sh`
 - Build the Spin cron sync app with Spin:
@@ -53,3 +63,10 @@ Run these commands from the repository root:
   sync logic and persists to PostgreSQL through Spin's outbound Postgres API.
 - Build `syncweatherstations` with the shared WASI skill script and run it
   through its custom host; ordinary `wasmtime run` cannot satisfy its imports.
+- `components/consumptionfetcher/` owns Eloverblik token exchange, structured
+  household-address matching, daily parsing, and day/week/month/year rollups.
+  It uses standard `wasi:http`; its native host owns PostgreSQL, migrations,
+  and the custom `storage` import. It is not a Spin app.
+- Consumption fetcher quantities are integer milli-kWh. Merge persisted daily
+  history before recomputing rollups; never treat missing quantities as zero.
+  Preserve point type and identity: grid export is not gross solar production.
