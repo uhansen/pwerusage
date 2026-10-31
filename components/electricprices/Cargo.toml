@@ -1,0 +1,23 @@
+[package]
+name = "electricprices"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+chrono = "0.4"
+chrono-tz = "0.10"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+wit-bindgen = { version = "0.62", features = ["macros"] }
+
+[target.'cfg(all(target_os = "wasi", target_env = "p3"))'.dependencies]
+wasip3 = { version = "0.9", features = ["http-compat"] }
+http = "1"
+http-body-util = "0.1"
+bytes = "1"
+
+[target.'cfg(all(target_os = "wasi", not(target_env = "p3")))'.dependencies]
+wasi = "0.14"

@@ -34,6 +34,16 @@ Run these commands from the repository root:
   `cd components/consumptionfetcher && cargo test --manifest-path host/Cargo.toml && cargo clippy --manifest-path host/Cargo.toml --all-targets -- -D warnings && cargo fmt --manifest-path host/Cargo.toml --check`
 - Run the consumption fetcher host (with `ELOVERBLIK_REFRESH_TOKEN` and `DATABASE_URL` set):
   `cd components/consumptionfetcher && ../../.github/skills/wasi-component-build/scripts/run.sh --host host/target/debug/consumptionfetcher-host <component-path> --street Examplevej --number 12 --postcode 2200`
+- Build the electric prices component:
+  `cd components/electricprices && ../../.github/skills/wasi-component-build/scripts/build.sh`
+- Test/lint/format the electric prices component:
+  `cd components/electricprices && cargo test && cargo clippy --all-targets -- -D warnings && cargo fmt --check`
+- Build the electric prices host:
+  `cd components/electricprices && cargo build --manifest-path host/Cargo.toml`
+- Test/lint/format the electric prices host:
+  `cd components/electricprices && cargo test --manifest-path host/Cargo.toml && cargo clippy --manifest-path host/Cargo.toml --all-targets -- -D warnings && cargo fmt --manifest-path host/Cargo.toml --check`
+- Run the electric prices host (with `ELECTRICITYMAPS_API_TOKEN` and `DATABASE_URL` set):
+  `cd components/electricprices && ../../.github/skills/wasi-component-build/scripts/run.sh --host host/target/debug/electricprices-host <component-path> --provider-name Example --markup 0.10 --zone DK-DK2 --vat`
 - Build the Spin cron sync app:
   `cd apps/syncweatherstations-cron && ./build.sh`
 - Build the Spin cron sync app with Spin:
@@ -70,3 +80,9 @@ Run these commands from the repository root:
 - Consumption fetcher quantities are integer milli-kWh. Merge persisted daily
   history before recomputing rollups; never treat missing quantities as zero.
   Preserve point type and identity: grid export is not gross solar production.
+- `components/electricprices/` fetches hourly Electricity Maps day-ahead prices
+  for a zone or coordinates and applies caller-supplied supplier markup and
+  optional VAT in DKK/kWh. Its native host owns PostgreSQL and restricted HTTPS.
+  It is not a Spin app. Upcoming published prices are not statistical forecasts
+  or full household tariffs; history must not be overwritten by upcoming rows.
+  Preserve raw units and exchange rates; never turn unavailable prices into zero.

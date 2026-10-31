@@ -1,0 +1,62 @@
+package pwrusage:electric-prices@0.1.0;
+
+interface types {
+    record provider {
+        name: string,
+        markup-per-kwh: f64,
+        markup-currency: string,
+        include-vat: bool,
+    }
+
+    record coordinates { latitude: f64, longitude: f64 }
+    variant position { coordinates(coordinates), zone(string) }
+    enum price-kind { history, latest, forecast }
+
+    record price-point {
+        zone: string,
+        datetime: string,
+        kind: price-kind,
+        raw-value: f64,
+        raw-unit: string,
+        eur-dkk-rate: f64,
+        spot-dkk-kwh: f64,
+        markup-dkk-kwh: f64,
+        total-dkk-kwh: f64,
+    }
+
+    record fetch-summary {
+        zone: string,
+        history-records: u32,
+        latest-records: u32,
+        forecast-records: u32,
+        unavailable-records: u32,
+        persisted-records: u32,
+    }
+
+    variant fetch-error {
+        config(string),
+        auth(string),
+        invalid-position(string),
+        zone-not-found(string),
+        upstream(string),
+        rate-limited(string),
+        invalid-data(string),
+        storage(string),
+    }
+}
+
+interface storage {
+    use types.{provider, price-point};
+    last-history: async func(zone: string, provider-name: string) -> result<option<string>, string>;
+    persist: async func(provider: provider, points: list<price-point>) -> result<u32, string>;
+}
+
+interface fetcher {
+    use types.{provider, position, fetch-summary, fetch-error};
+    fetch: async func(provider: provider, position: position, history-from: option<string>, history-to: option<string>) -> result<fetch-summary, fetch-error>;
+}
+
+world electric-prices {
+    import storage;
+    export fetcher;
+}
