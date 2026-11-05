@@ -1,10 +1,16 @@
 # pwrusagesensorbackend
 
 A **native Spin MQTT service** on the laptop/server. It validates SaveEye
-envelopes forwarded by [SaveEyeEdgeListenerApp](../SaveEyeEdgeListenerApp/README.md)
+envelopes forwarded by [SaveEyeEdgeListenerApp](../../iotdevices/SaveEyeEdgeListenerApp/README.md)
 and stores the latest reading per device in PostgreSQL. Only the server has
 database credentials. This is initially a SaveEye backend, not a generic
 sensor platform or HTTP API.
+
+Start with the [end-to-end deployment checklist](../../iotdevices/README.md).
+Unless stated otherwise, run this guide's commands on the laptop/server from
+the repository checkout's `pwerusage/pwrusagesensorbackend` directory. A
+different server needs its own checkout and local PostgreSQL; do not point
+the Pi at this laptop's database.
 
 ```text
 Pi edge -> authenticated LAN MQTT:1884
@@ -103,16 +109,9 @@ MQTT, or LAN PostgreSQL exposure is needed.
 
 ## 3. Build and install native Spin
 
-Build from the repository checkout, with sibling `../saveeye-telemetry`
-available. Use Rust 1.98 or newer and Spin 4.2.6:
-
-```bash
-rustup target add wasm32-wasip2
-spin build
-```
-
-Install the matching native Spin release on the server. For an x86-64 Linux
-server (use `SPIN_ARCH=aarch64` for ARM64):
+Install Spin before invoking the source build below. The following download
+uses the GitHub CLI (`gh`), `tar` and `sha256sum`. For an x86-64 Linux server
+(use `SPIN_ARCH=aarch64` for ARM64):
 
 ```bash
 SPIN_ARCH=amd64
@@ -126,6 +125,27 @@ sudo install -m 0755 "$SPIN_DOWNLOAD/spin" /usr/local/bin/spin
 /usr/local/bin/spin --version
 ```
 
+Build from the repository checkout with
+`../../components/saveeye-telemetry` available. Install Rust 1.98 or newer
+with rustup first if needed. Build-time composition needs the pinned `wac`
+and `wasm-tools` tools:
+
+```bash
+rustup target add wasm32-wasip2
+cargo install wac-cli --version 0.10.1 --locked
+cargo install wasm-tools --version 1.261.0 --locked --no-default-features --features component
+/usr/local/bin/spin build
+```
+
+`spin build` runs `build.sh`, which composes the MQTT adapter with the
+telemetry component into `composed.wasm`. The manifest must use this artifact,
+not the unlinked adapter under `target/`. Alternatively, build on the
+workstation and copy `composed.wasm` and its matching `spin.toml` to the server
+checkout before the install commands below. The composed Wasm is portable
+between x86-64 and ARM64; only the Spin/plugin binaries are host-specific.
+The server does not need Rust or composition tools when using prebuilt
+artifacts.
+
 Create a dedicated service account and install the MQTT plugin **as that
 account**, not just your interactive user. Skip `useradd` if already created:
 
@@ -138,10 +158,9 @@ sudo -u pwrusage-sensor env HOME=/var/lib/pwrusagesensorbackend \
   /usr/local/bin/spin plugins install --url \
   https://github.com/spinframework/spin-trigger-plugins/releases/download/mqtt-v0.9.6/trigger-mqtt.json --yes
 
-sudo install -d -m 0755 /opt/pwrusagesensorbackend/target/wasm32-wasip2/release
+sudo install -d -m 0755 /opt/pwrusagesensorbackend
 sudo install -m 0644 spin.toml /opt/pwrusagesensorbackend/spin.toml
-sudo install -m 0644 target/wasm32-wasip2/release/pwrusagesensorbackend.wasm \
-  /opt/pwrusagesensorbackend/target/wasm32-wasip2/release/pwrusagesensorbackend.wasm
+sudo install -m 0644 composed.wasm /opt/pwrusagesensorbackend/composed.wasm
 sudo install -d -o root -g pwrusage-sensor -m 0750 /etc/pwrusagesensorbackend
 sudo install -o root -g pwrusage-sensor -m 0640 deploy/secrets/backend.env \
   /etc/pwrusagesensorbackend/backend.env
@@ -182,7 +201,13 @@ two backend subscribers would both process each message.
 
 ## Contract and storage
 
-Shared code lives in `../saveeye-telemetry`. The wire format is:
+Telemetry processing lives in the reusable
+[Wasm component](../../components/saveeye-telemetry/README.md).
+Both apps import its authoritative WIT interface and compose it at build time;
+there is no shared Rust path dependency. The backend receives validated
+identity/timestamps, reading JSON and summary over WIT, while retaining sole
+ownership of PostgreSQL. Credential and broker helpers remain native host
+tools under `pwerusage/deploy`. The MQTT wire format is unchanged:
 
 ```json
 {
@@ -277,10 +302,10 @@ From this directory:
 cargo test
 cargo clippy --all-targets -- -D warnings
 cargo fmt --check
-cargo test --manifest-path ../saveeye-telemetry/Cargo.toml
+cargo test --manifest-path ../../components/saveeye-telemetry/Cargo.toml
 spin build
-docker build -f ../SaveEyeEdgeListenerApp/Dockerfile \
-  -t saveeye-edge-listener:0.1.0 ..
+docker build -f ../../iotdevices/SaveEyeEdgeListenerApp/Dockerfile \
+  -t saveeye-edge-listener:0.1.0 ../..
 SPIN_BIN=/usr/local/bin/spin python3 tests/integration.py
 ```
 

@@ -25,10 +25,10 @@ topic = "{{ mqtt_topic }}"
 qos = "1"
 
 [component.pwrusagesensorbackend]
-source = "target/wasm32-wasip2/release/pwrusagesensorbackend.wasm"
+source = "composed.wasm"
 allowed_outbound_hosts = ["{{ db_outbound_host }}"]
 [component.pwrusagesensorbackend.variables]
 db_url = "{{ db_url }}"
 [component.pwrusagesensorbackend.build]
-command = "cargo build --locked --target wasm32-wasip2 --release"
-watch = ["src/**/*.rs", "sql/*.sql", "../saveeye-telemetry/src/*.rs", "Cargo.toml", "Cargo.lock"]
+command = "bash build.sh"
+watch = ["src/**/*.rs", "sql/*.sql", "../../components/saveeye-telemetry/src/*.rs", "../../components/saveeye-telemetry/wit/*.wit", "../../components/saveeye-telemetry/Cargo.toml", "../../components/saveeye-telemetry/Cargo.lock", "Cargo.toml", "Cargo.lock", "build.sh"]

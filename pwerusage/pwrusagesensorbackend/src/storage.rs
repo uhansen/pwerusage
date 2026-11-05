@@ -4,16 +4,14 @@ use spin_sdk::{
     variables,
 };
 
-use saveeye_telemetry::Envelope;
+use crate::telemetry::pwrusage::saveeye::processor::ValidatedReading;
 
 const UPSERT: &str = include_str!("../sql/upsert_latest.sql");
 
-pub async fn persist(envelope: &Envelope) -> Result<()> {
-    let reading = &envelope.reading;
+pub async fn persist(reading: &ValidatedReading) -> Result<()> {
     let database_url = variables::get("db_url")
         .await
         .context("read required db_url variable")?;
-    let body = serde_json::to_vec(reading).context("encode SaveEye reading")?;
     // Connection errors may echo a malformed URL containing credentials.
     let connection = Connection::open(database_url).await.map_err(|_| {
         anyhow!(
@@ -24,10 +22,10 @@ pub async fn persist(envelope: &Envelope) -> Result<()> {
         .execute(
             UPSERT,
             vec![
-                ParameterValue::Str(reading.telemetry.device_serial().to_owned()),
+                ParameterValue::Str(reading.device_serial.clone()),
                 ParameterValue::Str(reading.received_at.clone()),
-                ParameterValue::Jsonb(body),
-                ParameterValue::Str(envelope.edge_id.clone()),
+                ParameterValue::Jsonb(reading.reading_json.clone()),
+                ParameterValue::Str(reading.edge_id.clone()),
             ],
         )
         .await

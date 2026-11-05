@@ -51,7 +51,7 @@ def main():
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     if args.role == "edge":
-        directory = root / "SaveEyeEdgeListenerApp/deploy/secrets"
+        directory = root.parent / "iotdevices/SaveEyeEdgeListenerApp/deploy/secrets"
         device = getpass.getpass("Local saveeye-device password (16+ characters): ")
         listener = getpass.getpass("Local saveeye-listener password (16+ characters): ")
         upstream = getpass.getpass("Server sensor-edge password (same as server): ")

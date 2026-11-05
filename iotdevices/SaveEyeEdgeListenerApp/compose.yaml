@@ -6,9 +6,9 @@ services:
     ports:
       - "${PI_LAN_IP:?Set PI_LAN_IP}:${MQTT_PORT:-1883}:1883"
     volumes:
-      - ../deploy/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ../../pwerusage/deploy/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
       - ./deploy/mosquitto/acl:/mosquitto/config/acl:ro
-      - ../deploy/mosquitto/start.sh:/mosquitto/config/start.sh:ro
+      - ../../pwerusage/deploy/mosquitto/start.sh:/mosquitto/config/start.sh:ro
       - ${SAVE_EYE_SECRETS_DIR:-./deploy/secrets}/passwords:/mosquitto/secrets/passwords:ro
       - ${SAVE_EYE_SECRETS_DIR:-./deploy/secrets}/listener.options:/mosquitto/secrets/listener.options:ro
       - mosquitto-data:/mosquitto/data
@@ -28,8 +28,8 @@ services:
   listener:
     image: ${SAVE_EYE_EDGE_IMAGE:-saveeye-edge-listener:0.1.0}
     build:
-      context: ..
-      dockerfile: SaveEyeEdgeListenerApp/Dockerfile
+      context: ../..
+      dockerfile: iotdevices/SaveEyeEdgeListenerApp/Dockerfile
     restart: unless-stopped
     depends_on:
       mosquitto:

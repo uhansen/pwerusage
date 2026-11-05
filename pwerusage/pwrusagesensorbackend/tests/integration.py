@@ -12,10 +12,11 @@ import socket
 import subprocess
 import tempfile
 import time
+from unittest.mock import patch
 
 APP = Path(__file__).resolve().parents[1]
 ROOT = APP.parent
-EDGE = ROOT / "SaveEyeEdgeListenerApp"
+EDGE = ROOT.parent / "iotdevices/SaveEyeEdgeListenerApp"
 TOPIC = "pwrusage/sensors/saveeye/v1"
 spec = importlib.util.spec_from_file_location("setup_secrets", ROOT / "deploy/setup-secrets.py")
 setup = importlib.util.module_from_spec(spec)
@@ -44,8 +45,14 @@ def free_port():
 
 
 def exercise(directory):
+    bundle = directory / "bundle"
+    helper = bundle / "pwerusage/deploy/setup-secrets.py"
+    helper.parent.mkdir(parents=True)
+    helper.write_text((ROOT / "deploy/setup-secrets.py").read_text())
     local_secrets, server_secrets, tls_dir = (
-        directory / "edge", directory / "server", directory / "tls"
+        bundle / "iotdevices/SaveEyeEdgeListenerApp/deploy/secrets",
+        bundle / "pwerusage/pwrusagesensorbackend/deploy/secrets",
+        directory / "tls",
     )
     tls_dir.mkdir()
     run([
@@ -56,15 +63,18 @@ def exercise(directory):
     device_password, local_password, upstream_password, backend_password, db_password = (
         secrets.token_hex(16) for _ in range(5)
     )
-    setup.provision(local_secrets, {
-        "saveeye-device": device_password, "saveeye-listener": local_password
-    }, {"edge.env": {
-        "SPIN_VARIABLE_MQTT_PASSWORD": local_password,
-        "SPIN_VARIABLE_UPSTREAM_PASSWORD": upstream_password,
-    }})
-    setup.provision(server_secrets, {
-        "sensor-edge": upstream_password, "sensor-backend": backend_password
-    }, {})
+    # Exercise role selection against the deploy-only bundle layout as well as
+    # using the resulting real credentials in both brokers.
+    for role, answers in (
+        ("edge", [device_password, local_password, upstream_password]),
+        ("server", [upstream_password, backend_password, "postgresql://test@localhost/saveeye"]),
+    ):
+        with patch.object(setup, "__file__", str(helper)), \
+                patch("sys.argv", [str(helper), role]), \
+                patch.object(setup.getpass, "getpass", side_effect=answers):
+            setup.main()
+    assert (local_secrets / "edge.env").is_file()
+    assert (server_secrets / "backend.env").is_file()
     mqtt_port, upstream_port, db_port = free_port(), free_port(), free_port()
     project = f"saveeye-split-test-{secrets.token_hex(4)}"
     env_file = directory / "compose.env"
@@ -149,7 +159,7 @@ def exercise(directory):
                 start_new_session=True,
             )
 
-    fixture = json.loads((ROOT / "saveeye-telemetry/tests/fixtures/kamstrup-telemetry.json").read_text())
+    fixture = json.loads((ROOT.parent / "components/saveeye-telemetry/tests/fixtures/kamstrup-telemetry.json").read_text())
 
     def send_and_wait(payload):
         serial, power = payload["saveeyeDeviceSerialNumber"], payload["activeActualConsumption"]["total"]

@@ -1,0 +1,40 @@
+package pwrusage:saveeye@0.1.0;
+
+interface processor {
+    record prepared-reading {
+        envelope: list<u8>,
+        summary: string,
+    }
+
+    variant preparation {
+        forward(prepared-reading),
+        filtered(string),
+    }
+
+    record validated-reading {
+        device-serial: string,
+        received-at: string,
+        edge-id: string,
+        reading-json: list<u8>,
+        summary: string,
+    }
+
+    variant processing-error {
+        invalid-telemetry(string),
+        invalid-envelope(string),
+        invalid-configuration(string),
+    }
+
+    prepare: func(payload: list<u8>, received-at: string, edge-id: string, device-filter: string)
+        -> result<preparation, processing-error>;
+
+    validate: func(payload: list<u8>) -> result<validated-reading, processing-error>;
+}
+
+world telemetry-component {
+    export processor;
+}
+
+world telemetry-client {
+    import processor;
+}

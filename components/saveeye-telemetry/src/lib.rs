@@ -12,6 +12,65 @@
 use anyhow::{Result, ensure};
 use serde::{Deserialize, Serialize};
 
+wit_bindgen::generate!({
+    path: "wit",
+    world: "telemetry-component",
+});
+
+use exports::pwrusage::saveeye::processor::{
+    Guest, Preparation, PreparedReading, ProcessingError, ValidatedReading,
+};
+
+struct Component;
+
+impl Guest for Component {
+    fn prepare(
+        payload: Vec<u8>,
+        received_at: String,
+        edge_id: String,
+        device_filter: String,
+    ) -> std::result::Result<Preparation, ProcessingError> {
+        let payload = std::str::from_utf8(&payload)
+            .map_err(|error| ProcessingError::InvalidTelemetry(format!("non-UTF-8: {error}")))?;
+        let telemetry: Telemetry = serde_json::from_str(payload)
+            .map_err(|error| ProcessingError::InvalidTelemetry(error.to_string()))?;
+        let wanted = device_filter.trim();
+        if !wanted.is_empty() && !wanted.eq_ignore_ascii_case(telemetry.device_serial()) {
+            return Ok(Preparation::Filtered(format!(
+                "ignoring telemetry from '{}' (expecting '{wanted}')",
+                telemetry.device_serial()
+            )));
+        }
+        let reading = Reading::new(telemetry, received_at);
+        let envelope = Envelope::new(edge_id, reading)
+            .map_err(|error| ProcessingError::InvalidConfiguration(error.to_string()))?;
+        Ok(Preparation::Forward(PreparedReading {
+            summary: envelope.reading.summary(),
+            envelope: serde_json::to_vec(&envelope)
+                .map_err(|error| ProcessingError::InvalidTelemetry(error.to_string()))?,
+        }))
+    }
+
+    fn validate(payload: Vec<u8>) -> std::result::Result<ValidatedReading, ProcessingError> {
+        let envelope: Envelope = serde_json::from_slice(&payload)
+            .map_err(|error| ProcessingError::InvalidEnvelope(error.to_string()))?;
+        envelope
+            .validate()
+            .map_err(|error| ProcessingError::InvalidEnvelope(error.to_string()))?;
+        Ok(ValidatedReading {
+            device_serial: envelope.reading.telemetry.device_serial().to_owned(),
+            received_at: envelope.reading.received_at.clone(),
+            edge_id: envelope.edge_id,
+            summary: envelope.reading.summary(),
+            reading_json: serde_json::to_vec(&envelope.reading)
+                .map_err(|error| ProcessingError::InvalidEnvelope(error.to_string()))?,
+        })
+    }
+}
+
+#[cfg(target_family = "wasm")]
+export!(Component);
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Envelope {
@@ -337,6 +396,56 @@ mod tests {
     use super::*;
 
     const KAMSTRUP: &str = include_str!("../tests/fixtures/kamstrup-telemetry.json");
+
+    #[test]
+    fn exported_operations_prepare_and_validate_without_changing_the_reading() {
+        let Preparation::Forward(prepared) = Component::prepare(
+            KAMSTRUP.as_bytes().to_vec(),
+            "2026-10-27T08:15:01Z".to_owned(),
+            "pi-1".to_owned(),
+            " j85lh2h4 ".to_owned(),
+        )
+        .unwrap() else {
+            panic!("expected matching device to be forwarded");
+        };
+        let validated = Component::validate(prepared.envelope).unwrap();
+        assert_eq!(validated.device_serial, "J85LH2H4");
+        assert_eq!(validated.edge_id, "pi-1");
+        assert_eq!(validated.received_at, "2026-10-27T08:15:01Z");
+        assert_eq!(validated.summary, prepared.summary);
+        let reading: Reading = serde_json::from_slice(&validated.reading_json).unwrap();
+        assert_eq!(reading.net_consumption_w, Some(812.0));
+    }
+
+    #[test]
+    fn exported_prepare_distinguishes_filtering_input_and_configuration_errors() {
+        let prepare = |payload: &[u8], edge: &str, filter: &str| {
+            Component::prepare(
+                payload.to_vec(),
+                "2026-10-27T08:15:01Z".to_owned(),
+                edge.to_owned(),
+                filter.to_owned(),
+            )
+        };
+        assert!(matches!(
+            prepare(KAMSTRUP.as_bytes(), "pi-1", "another-device"),
+            Ok(Preparation::Filtered(_))
+        ));
+        for invalid in [b"not-json".as_slice(), &[0xff]] {
+            assert!(matches!(
+                prepare(invalid, "pi-1", ""),
+                Err(ProcessingError::InvalidTelemetry(_))
+            ));
+        }
+        assert!(matches!(
+            prepare(KAMSTRUP.as_bytes(), "", ""),
+            Err(ProcessingError::InvalidConfiguration(_))
+        ));
+        assert!(matches!(
+            Component::validate(b"{}".to_vec()),
+            Err(ProcessingError::InvalidEnvelope(_))
+        ));
+    }
 
     fn envelope() -> Envelope {
         Envelope::new(

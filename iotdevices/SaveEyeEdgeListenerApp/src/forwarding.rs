@@ -1,16 +1,13 @@
 use std::time::Duration;
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Result, anyhow};
 use futures::{FutureExt, select_biased};
-use saveeye_telemetry::{Envelope, Reading};
 use spin_sdk::{
     mqtt::{Connection, Qos},
     variables,
 };
 
-pub async fn forward(reading: Reading) -> Result<()> {
-    let edge_id = variables::get("edge_id").await.context("read edge_id")?;
-    let envelope = Envelope::new(edge_id.clone(), reading)?;
+pub async fn forward(envelope: Vec<u8>, edge_id: &str) -> Result<()> {
     let address = variables::get("upstream_address").await?;
     let username = variables::get("upstream_username").await?;
     let password = variables::get("upstream_password").await?;
@@ -29,7 +26,7 @@ pub async fn forward(reading: Reading) -> Result<()> {
                 anyhow!("upstream MQTT open failed; check address, credentials and capability")
             })?;
         connection
-            .publish(topic, serde_json::to_vec(&envelope)?, Qos::AtLeastOnce)
+            .publish(topic, envelope, Qos::AtLeastOnce)
             .await
             .map_err(|_| {
                 anyhow!("upstream MQTT publish failed; check broker connectivity and ACL")

@@ -35,7 +35,7 @@ topic = "{{ mqtt_topic }}"
 qos = "1"
 
 [component.save-eye-edge-listener-app]
-source = "target/wasm32-wasip2/release/save_eye_edge_listener_app.wasm"
+source = "composed.wasm"
 allowed_outbound_hosts = ["{{ upstream_outbound_host }}"]
 [component.save-eye-edge-listener-app.variables]
 device_serial = "{{ device_serial }}"
@@ -45,5 +45,5 @@ upstream_username = "{{ upstream_username }}"
 upstream_password = "{{ upstream_password }}"
 upstream_topic = "{{ upstream_topic }}"
 [component.save-eye-edge-listener-app.build]
-command = "cargo build --locked --target wasm32-wasip2 --release"
-watch = ["src/**/*.rs", "../saveeye-telemetry/src/*.rs", "Cargo.toml", "Cargo.lock"]
+command = "bash build.sh"
+watch = ["src/**/*.rs", "../../components/saveeye-telemetry/src/*.rs", "../../components/saveeye-telemetry/wit/*.wit", "../../components/saveeye-telemetry/Cargo.toml", "../../components/saveeye-telemetry/Cargo.lock", "Cargo.toml", "Cargo.lock", "build.sh"]

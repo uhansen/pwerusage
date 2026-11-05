@@ -1,5 +1,6 @@
 target/
 .spin/
+composed.wasm
 .env
 deploy/secrets/
 __pycache__/

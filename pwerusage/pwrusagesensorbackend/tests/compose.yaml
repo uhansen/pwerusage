@@ -9,9 +9,9 @@ services:
     ports:
       - "127.0.0.1:${TEST_UPSTREAM_PORT}:1883"
     volumes:
-      - ../deploy/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
-      - ../deploy/mosquitto/start.sh:/mosquitto/config/start.sh:ro
-      - ../pwrusagesensorbackend/deploy/mosquitto/acl:/mosquitto/config/acl:ro
+      - ../../pwerusage/deploy/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ../../pwerusage/deploy/mosquitto/start.sh:/mosquitto/config/start.sh:ro
+      - ../../pwerusage/pwrusagesensorbackend/deploy/mosquitto/acl:/mosquitto/config/acl:ro
       - ${TEST_SERVER_SECRETS}/passwords:/mosquitto/secrets/passwords:ro
       - ${TEST_SERVER_SECRETS}/backend.options:/mosquitto/secrets/backend.options:ro
       - ${TEST_SERVER_SECRETS}/edge.options:/mosquitto/secrets/edge.options:ro
