@@ -6,6 +6,11 @@ and [`pwrusagesensorbackend`](../../pwerusage/pwrusagesensorbackend/README.md)
 with `wac plug`. It replaces the former shared Rust library under `pwerusage`.
 Neither app links the model as a Rust path dependency.
 
+![SaveEye WIT component composition](../../iotdevices/saveeye-components.svg)
+
+[UML source](../../iotdevices/saveeye-components.puml) |
+[Pi/server deployment diagram](../../iotdevices/saveeye-deployment.svg)
+
 ## Interface
 
 [`wit/world.wit`](wit/world.wit) is the source of truth for

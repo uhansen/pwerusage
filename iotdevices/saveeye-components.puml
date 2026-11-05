@@ -1,0 +1,66 @@
+@startuml
+title SaveEye telemetry: WIT component composition
+top to bottom direction
+
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam componentStyle rectangle
+skinparam wrapWidth 250
+
+package "Authoritative reusable component\ncomponents/saveeye-telemetry" {
+  artifact "wit/world.wit\npwrusage:saveeye@0.1.0" as Wit
+  component "Telemetry processor\nsrc/lib.rs" as Processor
+  artifact "saveeye_telemetry.wasm\nWASIp2 production build" as TelemetryWasm
+  Wit ..> Processor : generated export bindings
+  Processor ..> TelemetryWasm : build
+}
+
+package "Pi edge app\niotdevices/SaveEyeEdgeListenerApp" {
+  component "MQTT handler\nsrc/lib.rs" as EdgeHandler
+  component "MQTT publisher\nsrc/forwarding.rs" as Forwarder
+  artifact "save_eye_edge_listener_app.wasm\nadapter with telemetry import" as EdgeWasm
+  artifact "composed.wasm\nloaded by spin.toml / ARM64 image" as EdgeComposed
+  EdgeHandler --> Forwarder : prepared envelope + edge ID
+  EdgeHandler ..> EdgeWasm : build
+  Forwarder ..> EdgeWasm : build
+  EdgeWasm ..> EdgeComposed : build.sh / wac plug
+}
+
+package "Native server app\npwerusage/pwrusagesensorbackend" {
+  component "MQTT handler\nsrc/lib.rs" as BackendHandler
+  component "PostgreSQL adapter\nsrc/storage.rs + sql/upsert_latest.sql" as Storage
+  artifact "pwrusagesensorbackend.wasm\nadapter with telemetry import" as BackendWasm
+  artifact "composed.wasm\nloaded by spin.toml / systemd service" as BackendComposed
+  BackendHandler --> Storage : validated device serial, edge timestamp/ID,\nreading JSON and summary
+  BackendHandler ..> BackendWasm : build
+  Storage ..> BackendWasm : build
+  BackendWasm ..> BackendComposed : build.sh / wac plug
+}
+
+Wit ..> EdgeHandler : generated import bindings\nworld: telemetry-client
+Wit ..> BackendHandler : generated import bindings\nworld: telemetry-client
+EdgeHandler --> Processor : processor.prepare(raw bytes,\nreceipt time, edge ID, serial filter)
+BackendHandler --> Processor : processor.validate(envelope bytes)
+TelemetryWasm ..> EdgeComposed : plug same processor export
+TelemetryWasm ..> BackendComposed : plug same processor export
+
+note right of Processor
+Exports pwrusage:saveeye/processor@0.1.0.
+prepare: envelope + summary, or filtered reason.
+validate: validated fields for persistence.
+Owns parsing, normalization, filtering,
+envelope validation and summary formatting.
+No Spin SDK, network or database credentials.
+end note
+
+legend bottom
+  Solid arrows: logical calls; the processor runs inside each composed app.
+  Dotted arrows: build-time binding generation, compilation and composition.
+  Both final artifacts resolve the telemetry import and retain the MQTT handler export.
+  No shared Rust path dependency and no separate telemetry network service.
+  Production compositions use WASIp2 for Spin 4.2.6 / MQTT trigger 0.9.6.
+  The reusable component is also validated with the WASIp3-first build script.
+  Python credential generation and Mosquitto startup remain host-side deployment helpers.
+endlegend
+@enduml

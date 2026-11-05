@@ -1,0 +1,73 @@
+@startuml
+title SaveEye Pi/server deployment (default ports)
+top to bottom direction
+
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam componentStyle rectangle
+skinparam wrapWidth 250
+
+node "SaveEye device\nWi-Fi / Local MQTT" as Device <<device>>
+
+node "Raspberry Pi 5\n64-bit Raspberry Pi OS" as Pi {
+  package "Docker Compose: saveeye-edge" {
+    queue "Local Mosquitto\nPi LAN IP:1883" as LocalBroker
+    component "SaveEyeEdgeListenerApp\nSpin + MQTT trigger\nARM64 container" as Edge
+    artifact "mosquitto-data\npersistent volume" as LocalData
+  }
+}
+
+node "Laptop / server" as Server {
+  package "Docker Compose: pwrusagesensorbackend" {
+    queue "Server Mosquitto\nserver LAN IP:1884\n127.0.0.1:1884" as ServerBroker
+    artifact "sensor-mosquitto-data\npersistent volume" as ServerData
+  }
+  node "Native systemd service\nuser: pwrusage-sensor" {
+    component "pwrusagesensorbackend\nSpin + MQTT trigger\n/opt/pwrusagesensorbackend" as Backend
+  }
+  package "Existing Docker service (not recreated)" {
+    database "PostgreSQL 18 / postgres18\n127.0.0.1:5432\nsaveeye.latest_readings" as Db
+  }
+}
+
+Device --> LocalBroker : publish saveeye/telemetry\naccount: saveeye-device
+LocalBroker --> Edge : subscription / MQTT trigger, QoS 1\naccount: saveeye-listener
+Edge --> ServerBroker : publish pwrusage/sensors/saveeye/v1\nLAN MQTT, QoS 1, non-retained\naccount: sensor-edge
+ServerBroker --> Backend : subscription / MQTT trigger, QoS 1\nbackend connects over loopback\naccount: sensor-backend
+Backend --> Db : parameterized upsert over loopback\nrole: saveeye_listener
+LocalBroker ..> LocalData : broker state
+ServerBroker ..> ServerData : broker state
+
+note bottom of Edge
+Source: iotdevices/SaveEyeEdgeListenerApp
+Runs composed.wasm with telemetry processor.
+Validates, filters, normalizes, envelopes.
+No database credentials or capability.
+Outbound publish deadline: 5 seconds.
+end note
+
+note bottom of Backend
+Source: pwerusage/pwrusagesensorbackend
+Runs composed.wasm with telemetry processor.
+Validates envelope; owns database access.
+Latest per device serial; newer edge timestamp wins.
+edge_id and backend_received_at retain provenance.
+end note
+
+note top of ServerBroker
+Envelope: schemaVersion = 1, edgeId, reading.
+reading.receivedAt is the Pi receipt timestamp.
+Publisher credentials authenticate the account,
+not a cryptographic binding of edgeId.
+end note
+
+legend bottom
+  Trusted LAN only: authenticated MQTT is not encrypted.
+  PostgreSQL stays loopback-only; no Pi-to-database connection.
+  QoS 1 PUBACK means broker acceptance, not database success.
+  No durable forwarding queue or offline replay; outages can lose readings.
+  After restarting an input broker, explicitly restart its Spin listener.
+  Host-side credential/broker helpers remain under pwerusage/deploy.
+endlegend
+@enduml

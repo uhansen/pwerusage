@@ -12,6 +12,8 @@ the repository checkout's `pwerusage/pwrusagesensorbackend` directory. A
 different server needs its own checkout and local PostgreSQL; do not point
 the Pi at this laptop's database.
 
+![SaveEye Pi/server deployment](../../iotdevices/saveeye-deployment.svg)
+
 ```text
 Pi edge -> authenticated LAN MQTT:1884
         -> server Mosquitto -> native pwrusagesensorbackend

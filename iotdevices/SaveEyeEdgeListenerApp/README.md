@@ -8,6 +8,8 @@ database credentials, or database network capability**.
 Start with the [end-to-end deployment checklist](../README.md) for server/Pi
 setup order, required inputs, acceptance checks and recovery.
 
+![SaveEye Pi/server deployment](../saveeye-deployment.svg)
+
 ```text
 SaveEye on Wi-Fi
   -> Pi Mosquitto:1883 / saveeye/telemetry

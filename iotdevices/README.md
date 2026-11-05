@@ -5,6 +5,12 @@ backend. Deploy the server first, then the Pi. Commands in the linked guides
 are deployment instructions; running repository tests does not install these
 services or configure a physical Pi.
 
+![SaveEye Pi/server deployment](saveeye-deployment.svg)
+
+[Deployment UML source](saveeye-deployment.puml) |
+[Component composition diagram](saveeye-components.svg) |
+[Component UML source](saveeye-components.puml)
+
 ```text
 SaveEye device on Wi-Fi
   -> Raspberry Pi: Mosquitto + SaveEyeEdgeListenerApp (Docker Compose)
@@ -140,3 +146,19 @@ image/app artifacts before upgrades. The server runbook covers additive
 migrations and restore testing; the Pi runbook covers the directory move,
 cutover and rollback. Preserve Compose project names and broker volumes.
 Never use `docker compose down -v` to perform an ordinary upgrade.
+
+## Updating the architecture diagrams
+
+The `.puml` files above are the editable UML sources; their matching `.svg`
+files are generated locally, not through an online rendering service. With
+Java, Graphviz (`dot`) and PlantUML 1.2026.9 available, run from the repository
+root, replacing `/path/to/plantuml.jar` with your local renderer:
+
+```bash
+java -Djava.awt.headless=true -jar /path/to/plantuml.jar \
+  -failfast2 -tsvg -nometadata -charset UTF-8 \
+  iotdevices/saveeye-deployment.puml iotdevices/saveeye-components.puml
+```
+
+Regenerate both SVGs after changing the UML and keep source/output pairs
+together. The existing weather-station cron diagrams describe a separate app.
