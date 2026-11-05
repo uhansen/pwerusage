@@ -1,0 +1,49 @@
+spin_manifest_version = 2
+
+[application]
+name = "save-eye-edge-listener-app"
+version = "0.1.0"
+authors = ["Uffe Hansen <uffe.hansen@gmail.com>"]
+description = "MQTT edge forwarder for SaveEye+ (Kamstrup) telemetry"
+
+# Every value below can be overridden at runtime, for example:
+#   spin up --variable mqtt_address=mqtt://broker.local:1883 \
+#           --variable mqtt_username=saveeye
+[variables]
+mqtt_address = { default = "mqtt://localhost:1883" }
+mqtt_username = { default = "" }
+mqtt_password = { default = "", secret = true }
+mqtt_topic = { default = "saveeye/telemetry" }
+edge_id = { required = true }
+upstream_address = { required = true }
+upstream_username = { required = true }
+upstream_password = { required = true, secret = true }
+upstream_topic = { default = "pwrusage/sensors/saveeye/v1" }
+upstream_outbound_host = { required = true }
+# Leave empty to accept telemetry from every SaveEye device on the topic.
+device_serial = { default = "" }
+
+[application.trigger.mqtt]
+address = "{{ mqtt_address }}"
+username = "{{ mqtt_username }}"
+password = "{{ mqtt_password }}"
+keep_alive_interval = "30"
+
+[[trigger.mqtt]]
+component = "save-eye-edge-listener-app"
+topic = "{{ mqtt_topic }}"
+qos = "1"
+
+[component.save-eye-edge-listener-app]
+source = "target/wasm32-wasip2/release/save_eye_edge_listener_app.wasm"
+allowed_outbound_hosts = ["{{ upstream_outbound_host }}"]
+[component.save-eye-edge-listener-app.variables]
+device_serial = "{{ device_serial }}"
+edge_id = "{{ edge_id }}"
+upstream_address = "{{ upstream_address }}"
+upstream_username = "{{ upstream_username }}"
+upstream_password = "{{ upstream_password }}"
+upstream_topic = "{{ upstream_topic }}"
+[component.save-eye-edge-listener-app.build]
+command = "cargo build --locked --target wasm32-wasip2 --release"
+watch = ["src/**/*.rs", "../saveeye-telemetry/src/*.rs", "Cargo.toml", "Cargo.lock"]

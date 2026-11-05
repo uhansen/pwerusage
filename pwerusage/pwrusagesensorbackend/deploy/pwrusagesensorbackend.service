@@ -1,0 +1,27 @@
+[Unit]
+Description=Pwrusage sensor MQTT backend
+Wants=network-online.target
+After=network-online.target docker.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=pwrusage-sensor
+Group=pwrusage-sensor
+WorkingDirectory=/opt/pwrusagesensorbackend
+Environment=HOME=/var/lib/pwrusagesensorbackend
+EnvironmentFile=/etc/pwrusagesensorbackend/backend.env
+ExecStart=/usr/local/bin/spin up --from /opt/pwrusagesensorbackend/spin.toml --state-dir=
+Restart=always
+RestartSec=10
+TimeoutStopSec=15
+StateDirectory=pwrusagesensorbackend
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

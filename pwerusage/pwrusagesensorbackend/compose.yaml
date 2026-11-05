@@ -1,0 +1,30 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2@sha256:860aeb5d63ce509508f6dcfb2bc8a1c1dd2bc60555b562b45ce90e52d8dabb0f
+    restart: unless-stopped
+    command: ["/bin/sh", "/mosquitto/config/start.sh"]
+    ports:
+      - "127.0.0.1:${SENSOR_MQTT_PORT:-1884}:1883"
+      - "${SERVER_LAN_IP:?Set SERVER_LAN_IP}:${SENSOR_MQTT_PORT:-1884}:1883"
+    volumes:
+      - ../deploy/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./deploy/mosquitto/acl:/mosquitto/config/acl:ro
+      - ../deploy/mosquitto/start.sh:/mosquitto/config/start.sh:ro
+      - ${SENSOR_SECRETS_DIR:-./deploy/secrets}/passwords:/mosquitto/secrets/passwords:ro
+      - ${SENSOR_SECRETS_DIR:-./deploy/secrets}/backend.options:/mosquitto/secrets/backend.options:ro
+      - sensor-mosquitto-data:/mosquitto/data
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -o /mosquitto/secrets/backend.options -h 127.0.0.1 -t '$$SYS/broker/version' -C 1 -W 5"]
+      interval: 15s
+      timeout: 7s
+      retries: 3
+      start_period: 10s
+    mem_limit: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  sensor-mosquitto-data:

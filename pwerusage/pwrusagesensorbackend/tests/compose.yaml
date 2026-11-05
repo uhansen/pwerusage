@@ -1,0 +1,54 @@
+services:
+  mosquitto:
+    volumes:
+      - ${SAVE_EYE_SECRETS_DIR}/device.options:/mosquitto/secrets/device.options:ro
+
+  upstream:
+    image: eclipse-mosquitto:2@sha256:860aeb5d63ce509508f6dcfb2bc8a1c1dd2bc60555b562b45ce90e52d8dabb0f
+    command: ["/bin/sh", "/mosquitto/config/start.sh"]
+    ports:
+      - "127.0.0.1:${TEST_UPSTREAM_PORT}:1883"
+    volumes:
+      - ../deploy/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ../deploy/mosquitto/start.sh:/mosquitto/config/start.sh:ro
+      - ../pwrusagesensorbackend/deploy/mosquitto/acl:/mosquitto/config/acl:ro
+      - ${TEST_SERVER_SECRETS}/passwords:/mosquitto/secrets/passwords:ro
+      - ${TEST_SERVER_SECRETS}/backend.options:/mosquitto/secrets/backend.options:ro
+      - ${TEST_SERVER_SECRETS}/edge.options:/mosquitto/secrets/edge.options:ro
+      - upstream-data:/mosquitto/data
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -o /mosquitto/secrets/backend.options -t '$$SYS/broker/version' -C 1 -W 5"]
+      interval: 2s
+      timeout: 7s
+      retries: 20
+
+  database:
+    image: postgres:18
+    environment:
+      POSTGRES_PASSWORD: ${TEST_POSTGRES_PASSWORD:?Test password required}
+    ports:
+      - "127.0.0.1:${TEST_POSTGRES_PORT}:5432"
+    volumes:
+      - database-data:/var/lib/postgresql
+      - ${TEST_TLS_DIR:?Test TLS directory required}:/tls:ro
+    command:
+      - bash
+      - -ec
+      - |
+        cp /tls/server.key /tmp/server.key
+        chown postgres:postgres /tmp/server.key
+        chmod 600 /tmp/server.key
+        exec docker-entrypoint.sh postgres -c ssl=on -c ssl_cert_file=/tls/server.crt -c ssl_key_file=/tmp/server.key
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  blackhole:
+    image: eclipse-mosquitto:2@sha256:860aeb5d63ce509508f6dcfb2bc8a1c1dd2bc60555b562b45ce90e52d8dabb0f
+    entrypoint: ["/bin/sh", "-c", "sleep 60 | nc -l -p 1885"]
+
+volumes:
+  upstream-data:
+  database-data:

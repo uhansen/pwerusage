@@ -1,0 +1,57 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2@sha256:860aeb5d63ce509508f6dcfb2bc8a1c1dd2bc60555b562b45ce90e52d8dabb0f
+    restart: unless-stopped
+    command: ["/bin/sh", "/mosquitto/config/start.sh"]
+    ports:
+      - "${PI_LAN_IP:?Set PI_LAN_IP}:${MQTT_PORT:-1883}:1883"
+    volumes:
+      - ../deploy/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./deploy/mosquitto/acl:/mosquitto/config/acl:ro
+      - ../deploy/mosquitto/start.sh:/mosquitto/config/start.sh:ro
+      - ${SAVE_EYE_SECRETS_DIR:-./deploy/secrets}/passwords:/mosquitto/secrets/passwords:ro
+      - ${SAVE_EYE_SECRETS_DIR:-./deploy/secrets}/listener.options:/mosquitto/secrets/listener.options:ro
+      - mosquitto-data:/mosquitto/data
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -o /mosquitto/secrets/listener.options -h 127.0.0.1 -t '$$SYS/broker/version' -C 1 -W 5"]
+      interval: 15s
+      timeout: 7s
+      retries: 3
+      start_period: 10s
+    mem_limit: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  listener:
+    image: ${SAVE_EYE_EDGE_IMAGE:-saveeye-edge-listener:0.1.0}
+    build:
+      context: ..
+      dockerfile: SaveEyeEdgeListenerApp/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    env_file:
+      - ${SAVE_EYE_SECRETS_DIR:-./deploy/secrets}/edge.env
+    environment:
+      SPIN_VARIABLE_MQTT_ADDRESS: mqtt://mosquitto:1883
+      SPIN_VARIABLE_MQTT_USERNAME: saveeye-listener
+      SPIN_VARIABLE_MQTT_TOPIC: saveeye/telemetry
+      SPIN_VARIABLE_DEVICE_SERIAL: ${SAVE_EYE_DEVICE_SERIAL:-}
+      SPIN_VARIABLE_EDGE_ID: ${EDGE_ID:?Set EDGE_ID}
+      SPIN_VARIABLE_UPSTREAM_ADDRESS: ${UPSTREAM_ADDRESS:?Set UPSTREAM_ADDRESS}
+      SPIN_VARIABLE_UPSTREAM_OUTBOUND_HOST: ${UPSTREAM_ADDRESS:?Set UPSTREAM_ADDRESS}
+      SPIN_VARIABLE_UPSTREAM_USERNAME: sensor-edge
+      SPIN_VARIABLE_UPSTREAM_TOPIC: pwrusage/sensors/saveeye/v1
+    mem_limit: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  mosquitto-data:

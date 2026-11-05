@@ -1,0 +1,13 @@
+*
+!SaveEyeEdgeListenerApp/
+SaveEyeEdgeListenerApp/*
+!SaveEyeEdgeListenerApp/Cargo.toml
+!SaveEyeEdgeListenerApp/Cargo.lock
+!SaveEyeEdgeListenerApp/spin.toml
+!SaveEyeEdgeListenerApp/src/
+!SaveEyeEdgeListenerApp/src/**
+!saveeye-telemetry/
+saveeye-telemetry/*
+!saveeye-telemetry/Cargo.toml
+!saveeye-telemetry/src/
+!saveeye-telemetry/src/**

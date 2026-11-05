@@ -9,7 +9,66 @@
 //! Not every meter reports every field: a SaveEye+ for Kamstrup Omnipower may
 //! only report totals and no per-phase values, so all sections are optional.
 
+use anyhow::{Result, ensure};
 use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Envelope {
+    pub schema_version: u32,
+    pub edge_id: String,
+    pub reading: Reading,
+}
+
+impl Envelope {
+    pub fn new(edge_id: String, reading: Reading) -> Result<Self> {
+        let envelope = Self {
+            schema_version: 1,
+            edge_id,
+            reading,
+        };
+        envelope.validate()?;
+        Ok(envelope)
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        ensure!(self.schema_version == 1, "unsupported schemaVersion");
+        ensure!(
+            !self.edge_id.is_empty()
+                && self.edge_id.len() <= 64
+                && self
+                    .edge_id
+                    .bytes()
+                    .all(|c| c.is_ascii_alphanumeric() || b"_-.".contains(&c)),
+            "edgeId must be 1-64 letters, digits, underscores, dots or hyphens"
+        );
+        chrono::DateTime::parse_from_rfc3339(&self.reading.received_at)?;
+        let expected = Reading::new(
+            self.reading.telemetry.clone(),
+            self.reading.received_at.clone(),
+        );
+        ensure!(
+            self.reading.meter_kind == expected.meter_kind
+                && self.reading.net_consumption_w == expected.net_consumption_w
+                && self.reading.active_total_consumption_kwh
+                    == expected.active_total_consumption_kwh
+                && self.reading.active_total_production_kwh == expected.active_total_production_kwh,
+            "normalized reading does not match telemetry"
+        );
+        ensure!(
+            [
+                expected.net_consumption_w,
+                expected.active_total_consumption_kwh,
+                expected.active_total_production_kwh,
+            ]
+            .into_iter()
+            .flatten()
+            .all(f64::is_finite),
+            "non-finite derived reading"
+        );
+        Ok(())
+    }
+}
 
 /// Values that can be reported per phase (`L1`, `L2`, `L3`) and as a `total`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -167,7 +226,7 @@ impl Telemetry {
 /// The telemetry fields are flattened into the same JSON object, so consumers
 /// see the original schema (`saveeyeDeviceSerialNumber`, `activeTotalConsumption`,
 /// ...) alongside the derived conveniences.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Reading {
     /// When this listener received the message (RFC 3339).
@@ -278,6 +337,85 @@ mod tests {
     use super::*;
 
     const KAMSTRUP: &str = include_str!("../tests/fixtures/kamstrup-telemetry.json");
+
+    fn envelope() -> Envelope {
+        Envelope::new(
+            "pi-1".to_owned(),
+            Reading::new(
+                serde_json::from_str(KAMSTRUP).unwrap(),
+                "2026-10-27T08:15:01Z",
+            ),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn envelope_round_trips_and_preserves_receipt_time() {
+        let json = serde_json::to_vec(&envelope()).unwrap();
+        let decoded: Envelope = serde_json::from_slice(&json).unwrap();
+        decoded.validate().unwrap();
+        assert_eq!(decoded.reading.received_at, "2026-10-27T08:15:01Z");
+        Envelope::new(
+            "pi-minimal".to_owned(),
+            Reading::new(Telemetry::default(), "2026-10-27T08:15:01Z"),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn fractional_measurements_survive_envelope_validation() {
+        for watts in [18.336317597934625, 0.14285714285714285, 876.54321] {
+            let telemetry = Telemetry {
+                active_actual_consumption: Some(PhaseValues {
+                    total: Some(watts),
+                    ..Default::default()
+                }),
+                active_actual_production: Some(PhaseValues {
+                    total: Some(watts / 3.0),
+                    ..Default::default()
+                }),
+                active_total_consumption: Some(PhaseValues {
+                    total: Some(watts * 1000.0),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            };
+            let message = Envelope::new(
+                "pi-fractional".to_owned(),
+                Reading::new(telemetry, "2026-10-27T08:15:01Z"),
+            )
+            .unwrap();
+            let decoded: Envelope =
+                serde_json::from_slice(&serde_json::to_vec(&message).unwrap()).unwrap();
+            decoded.validate().unwrap();
+        }
+    }
+
+    #[test]
+    fn rejects_invalid_envelope_metadata() {
+        let mut message = envelope();
+        message.schema_version = 2;
+        assert!(message.validate().is_err());
+        message = envelope();
+        message.edge_id.clear();
+        assert!(message.validate().is_err());
+        message = envelope();
+        message.reading.received_at = "yesterday".to_owned();
+        assert!(message.validate().is_err());
+        let mut json = serde_json::to_value(envelope()).unwrap();
+        json.as_object_mut().unwrap().remove("edgeId");
+        assert!(serde_json::from_value::<Envelope>(json).is_err());
+    }
+
+    #[test]
+    fn rejects_inconsistent_derived_reading() {
+        let mut message = envelope();
+        message.reading.net_consumption_w = Some(999.0);
+        assert!(message.validate().is_err());
+        message = envelope();
+        message.reading.active_total_consumption_kwh = None;
+        assert!(message.validate().is_err());
+    }
 
     #[test]
     fn parses_a_kamstrup_payload() {

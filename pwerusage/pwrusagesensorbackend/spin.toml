@@ -1,0 +1,34 @@
+spin_manifest_version = 2
+
+[application]
+name = "pwrusagesensorbackend"
+version = "0.1.0"
+description = "MQTT sensor backend for normalized SaveEye edge readings"
+
+[variables]
+mqtt_address = { default = "mqtt://127.0.0.1:1884" }
+mqtt_username = { default = "sensor-backend" }
+mqtt_password = { required = true, secret = true }
+mqtt_topic = { default = "pwrusage/sensors/saveeye/v1" }
+db_url = { required = true, secret = true }
+db_outbound_host = { default = "postgres://127.0.0.1:5432" }
+
+[application.trigger.mqtt]
+address = "{{ mqtt_address }}"
+username = "{{ mqtt_username }}"
+password = "{{ mqtt_password }}"
+keep_alive_interval = "30"
+
+[[trigger.mqtt]]
+component = "pwrusagesensorbackend"
+topic = "{{ mqtt_topic }}"
+qos = "1"
+
+[component.pwrusagesensorbackend]
+source = "target/wasm32-wasip2/release/pwrusagesensorbackend.wasm"
+allowed_outbound_hosts = ["{{ db_outbound_host }}"]
+[component.pwrusagesensorbackend.variables]
+db_url = "{{ db_url }}"
+[component.pwrusagesensorbackend.build]
+command = "cargo build --locked --target wasm32-wasip2 --release"
+watch = ["src/**/*.rs", "sql/*.sql", "../saveeye-telemetry/src/*.rs", "Cargo.toml", "Cargo.lock"]

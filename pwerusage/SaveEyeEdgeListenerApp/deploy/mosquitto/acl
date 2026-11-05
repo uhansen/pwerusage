@@ -1,0 +1,6 @@
+user saveeye-device
+topic write saveeye/telemetry
+
+user saveeye-listener
+topic read saveeye/telemetry
+topic read $SYS/broker/version

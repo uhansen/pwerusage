@@ -1,32 +1,21 @@
-//! `SaveEyeListenerApp` — listens to SaveEye+ telemetry over MQTT.
+//! `SaveEyeEdgeListenerApp` forwards normalized SaveEye readings over MQTT.
 //!
 //! The SaveEye device is configured (in the SaveEye app) to publish local MQTT
 //! telemetry to a broker. This component subscribes to that topic, validates
 //! the JSON payload, filters by device serial when configured, derives a few
-//! convenience values, and stores the latest reading in Spin's key-value store.
-//!
-//! Stored keys in the `default` store:
-//!
-//! * `saveeye:latest` — the most recent reading from any device.
-//! * `saveeye:devices:<serial>` — the most recent reading for one device.
+//! convenience values, and forwards a versioned reading to the server broker.
 //!
 //! The payload model and the derived values follow the official Home Assistant
 //! integration for SaveEye devices (`saveeye/SaveEye-HomeAssistant`).
 
-mod telemetry;
+mod forwarding;
 
 use anyhow::Result;
 use chrono::Utc;
 use spin_mqtt_sdk::{Metadata, Payload, mqtt_component};
-use spin_sdk::key_value::Store;
 use spin_sdk::variables;
 
-use crate::telemetry::{Reading, Telemetry};
-
-/// Key holding the most recent reading, regardless of device.
-const LATEST_KEY: &str = "saveeye:latest";
-/// Prefix for the per-device latest reading.
-const DEVICE_KEY_PREFIX: &str = "saveeye:devices:";
+use saveeye_telemetry::{Reading, Telemetry};
 
 /// Entry point invoked by the Spin MQTT trigger for every message on
 /// `saveeye/telemetry` (see `spin.toml`).
@@ -62,18 +51,9 @@ async fn handle_message(message: Payload, metadata: Metadata) -> Result<()> {
     }
 
     let reading = Reading::new(telemetry, Utc::now().to_rfc3339());
-    let body = serde_json::to_vec(&reading)?;
+    forwarding::forward(reading.clone()).await?;
 
-    let store = Store::open_default().await?;
-    store
-        .set(
-            format!("{DEVICE_KEY_PREFIX}{}", reading.telemetry.device_serial()),
-            &body,
-        )
-        .await?;
-    store.set(LATEST_KEY, &body).await?;
-
-    println!("{}", reading.summary());
+    println!("Forwarded: {}", reading.summary());
     Ok(())
 }
 
